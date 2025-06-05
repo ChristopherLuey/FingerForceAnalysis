@@ -11,6 +11,9 @@ spring_rate_N_per_mm = 1.79
 spring_free_length = 76.2
 spring_fully_compressed_length = 28.48
 
+
+F_spring = spring_rate_N_per_mm * (spring_free_length - spring_fully_compressed_length)
+
 # Linkage lengths as symbolic variables
 L = {
     "GE": sp.Symbol('L_GE'),
@@ -64,6 +67,7 @@ values = {
     L["KJ"]: 30.5,
     L["AB"]: 25,
     L["AK"]: 23,
+    "L_CD": 40.01250,
 
     A["DF"]: 0,
     A["FE"]: np.pi/2,
@@ -203,6 +207,83 @@ def plot_mechanism(values, fig=None, ax=None, show=True, color=None):
     # print(f"Expected AK distance: {values[L['AK']]}, Actual distance: {ak_check}")
     
     return fig, ax
+
+def plot_mechanism_velocity(values, fig=None, ax=None, show=True, color=None):
+    
+    # Initialize the plot if not provided
+    if fig is None or ax is None:
+        fig, ax = plt.subplots(figsize=(10, 8))
+    
+    # Calculate all points
+    points = calculate_points(values)
+    
+    # Unpack all points for convenience
+    A, B, C, D, E, F, G, H, I, J, K = [points[key] for key in 'ABCDEFGHIJK']
+    
+    # Use specified color or default to regular colors
+    fe_color = color or 'b'
+    df_color = color or 'g'
+    gd_color = color or 'r'
+    ge_color = color or 'orange'
+    
+    # # Plot the links as lines
+    ax.plot([F[0], E[0]], [F[1], E[1]], 'brown', linewidth=3)  # Link FE
+    ax.plot([F[0], D[0]], [F[1], D[1]], 'brown', linewidth=3)  # Link DF
+    ax.plot([D[0], G[0]], [D[1], G[1]], 'red', linewidth=3)  # Link GD
+    ax.plot([G[0], E[0]], [G[1], E[1]], 'orange', linewidth=3)  # Link GE
+    ax.plot([G[0], C[0]], [G[1], C[1]], 'k--', linewidth=1)  # Link CG
+    ax.plot([G[0], H[0]], [G[1], H[1]], 'orange', linewidth=3)  # Link GH
+    ax.plot([H[0], I[0]], [H[1], I[1]], 'yellow', linewidth=3)  # Link IH
+    ax.plot([C[0], I[0]], [C[1], I[1]], 'purple', linewidth=3)  # Link CI
+
+
+    ax.plot([I[0], B[0]], [I[1], B[1]], 'k--', linewidth=1)  # Link IB
+    ax.plot([I[0], J[0]], [I[1], J[1]], 'yellow', linewidth=3)  # Link IJ
+    ax.plot([J[0], K[0]], [J[1], K[1]], 'blue', linewidth=3)  # Link KJ
+    ax.plot([B[0], K[0]], [B[1], K[1]], 'darkgreen', linewidth=3)  # Link KB
+    ax.plot([B[0], C[0]], [B[1], C[1]], 'purple', linewidth=3)  # Link BC
+    ax.plot([C[0], D[0]], [C[1], D[1]], 'red', linewidth=3)  # Link CD
+    
+    # # Add links to point A
+    ax.plot([B[0], A[0]], [B[1], A[1]], 'darkgreen', linewidth=3)  # Link AB
+    ax.plot([K[0], A[0]], [K[1], A[1]], 'darkgreen', linewidth=3)  # Link AK
+    
+    # Plot the points if no color is specified (to avoid cluttering with multiple positions)
+    if color is None:
+        for name, point in points.items():
+            ax.plot(point[0], point[1], 'ko', markersize=8)
+            ax.text(point[0]+0.05, point[1]+0.05, name, fontsize=12)
+    
+    # Set equal aspect ratio
+    ax.set_aspect('equal')
+    ax.grid(True)
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_title('Mechanism Plot with F at Origin')
+    
+    # Set x-axis limits as requested: -200 to 5
+    ax.set_xlim(-200, 5)
+    
+    # Calculate reasonable y-axis limits based on points
+    max_y_dim = max([np.max(np.abs(point[1])) for point in points.values()]) * 1.2
+    ax.set_ylim(-max_y_dim, max_y_dim)
+    
+    # Only show if explicitly requested
+    if show:
+        plt.show()
+    
+    # Verify closures of the loops
+    kb_check = np.linalg.norm(K - B)
+    ge_check = np.linalg.norm(G - E)
+    ab_check = np.linalg.norm(A - B)
+    ak_check = np.linalg.norm(A - K)
+    # print(f"Expected KB distance: {values[L['KB']]}, Actual distance: {kb_check}")
+    # print(f"Expected GE distance: {values[L['GE']]}, Actual distance: {ge_check}")
+    # print(f"Expected AB distance: {values[L['AB']]}, Actual distance: {ab_check}")
+    # print(f"Expected AK distance: {values[L['AK']]}, Actual distance: {ak_check}")
+    
+    return fig, ax
+
 
 def position(DF):
     values[L["DF"]] += DF
@@ -491,6 +572,94 @@ def velocity(DF_dot):
     values[A_dot["GD"]] = solution1[A_dot["GD"]]
     values[A_dot["GE"]] = solution1[A_dot["GE"]]
 
+    values[A_dot["GH"]] = values[A_dot["GE"]]
+    values[A_dot["CG"]] = values[A_dot["GD"]]
+    
+    # Horizontal components (cosine equation)
+    eq1 = L["IC"] * A_dot["IC"] * sp.cos(A["IC"]) - L["IH"] * A_dot["IH"] * sp.cos(A["IH"]) + L["GH"] * A_dot["GH"] * sp.cos(A["GH"]) - L["CG"] * A_dot["CG"] * sp.cos(A["CG"])
+    
+    # Vertical components (sine equation)
+    eq2 = -L["IC"] * A_dot["IC"] * sp.sin(A["IC"]) + L["IH"] * A_dot["IH"] * sp.sin(A["IH"]) - L["GH"] * A_dot["GH"] * sp.sin(A["GH"]) + L["CG"] * A_dot["CG"] * sp.sin(A["CG"])
+    
+    # Substitute known values
+    eq1_subs = eq1.subs(values)
+    eq2_subs = eq2.subs(values)
+    
+    # Create a system of equations to solve for IC and IH velocity angles
+    system = [eq1_subs, eq2_subs]
+    
+    # Variables to solve for
+    unknowns = [A_dot["IC"], A_dot["IH"]]
+    
+    # Solve the system of equations
+    solution2 = sp.solve(system, unknowns)
+    
+    # If no solution was found, return False to indicate failure
+    if solution2 is None:
+        print(f"No valid solution found for velocity {DF_dot} — linkage 2")
+        return False
+
+    values[A_dot["IC"]] = solution2[A_dot["IC"]]
+    values[A_dot["IH"]] = solution2[A_dot["IH"]]
+
+    values[A_dot["IB"]] = values[A_dot["IC"]]
+    values[A_dot["IJ"]] = values[A_dot["IH"]]
+
+    # Horizontal components (cosine equation)
+    eq1 = L["KJ"] * A_dot["KJ"] * sp.cos(A["KJ"]) - L["KB"] * A_dot["KB"] * sp.cos(A["KB"]) + L["IB"] * A_dot["IB"] * sp.cos(A["IB"]) - L["IJ"] * A_dot["IJ"] * sp.cos(A["IJ"])
+    
+    # Vertical components (sine equation)
+    eq2 = L["KJ"] * A_dot["KJ"] * sp.sin(A["KJ"]) + L["KB"] * A_dot["KB"] * sp.sin(A["KB"]) - L["IB"] * A_dot["IB"] * sp.sin(A["IB"]) + L["IJ"] * A_dot["IJ"] * sp.sin(A["IJ"])
+    
+    # Substitute known values
+    eq1_subs = eq1.subs(values)
+    eq2_subs = eq2.subs(values)
+    
+    # Create a system of equations to solve for KJ and KB velocity angles
+    system = [eq1_subs, eq2_subs]
+    
+    # Variables to solve for
+    unknowns = [A_dot["KJ"], A_dot["KB"]]
+    
+    # Solve the system of equations
+    solution3 = sp.solve(system, unknowns)
+    
+    # If no solution was found, return False to indicate failure
+    if solution3 is None:
+        print(f"No valid solution found for velocity {DF_dot} — linkage 3")
+        return False
+
+    values[A_dot["KJ"]] = solution3[A_dot["KJ"]]
+    values[A_dot["KB"]] = solution3[A_dot["KB"]]
+
+    eq1 = L["KB"] * A_dot["KB"] * sp.cos(A["KB"]) - L["AK"] * A_dot["AK"] * sp.cos(A["AK"]) - L["AB"] * A_dot["AB"] * sp.cos(A["AB"])
+    # Vertical components (sine equation)
+    eq2 = -L["KB"] * A_dot["KB"] * sp.sin(A["KB"]) + L["AK"] * A_dot["AK"] * sp.sin(A["AK"]) + L["AB"] * A_dot["AB"] * sp.sin(A["AB"])
+    
+    # Substitute known values
+    eq1_subs = eq1.subs(values)
+    eq2_subs = eq2.subs(values)
+    
+    # Create a system of equations to solve for AK and AB velocity angles
+    system = [eq1_subs, eq2_subs]
+    
+    # Variables to solve for
+    unknowns = [A_dot["AK"], A_dot["AB"]]
+    
+    # Solve the system of equations
+    solution4 = sp.solve(system, unknowns)
+    
+    # If no solution was found, return False to indicate failure
+    if solution4 is None:
+        print(f"No valid solution found for velocity {DF_dot} — linkage 4")
+        return False
+
+    # print("solution4: ", solution4)
+
+    values[A_dot["AK"]] = solution4[A_dot["AK"]]
+    values[A_dot["AB"]] = solution4[A_dot["AB"]]
+
+
 def force(DF):
     global values
     global spring_rate_N_per_mm
@@ -515,8 +684,11 @@ def force(DF):
     print("GD_vector: ", GD_vector)
     
     # Calculate cross product between spring force and GD vector
-    # For 2D vectors, cross product gives scalar: a×b = a_x*b_y - a_y*b_x
-    cross_product_spring_GD = F_spring_vector[0] * GD_vector[1] - F_spring_vector[1] * GD_vector[0]
+    # Convert 2D vectors to 3D by adding z=0 component
+    F_spring_vector_3d = np.array([F_spring_vector[0], F_spring_vector[1], 0])
+    GD_vector_3d = np.array([GD_vector[0], GD_vector[1], 0])
+    cross_product_spring_GD_3d = np.cross(GD_vector_3d, F_spring_vector_3d)
+    cross_product_spring_GD = cross_product_spring_GD_3d[2]  # Extract z-component (scalar result)
     print("cross_product_spring_GD: ", cross_product_spring_GD)
     
     # Calculate vector GA
@@ -535,7 +707,11 @@ def force(DF):
     print("AK_perp: ", AK_perp)
     
     # Calculate force at perpendicular to AK by crossing with vector GA
-    cross_product_GA_AKperp = GA_vector[0] * AK_perp[1] - GA_vector[1] * AK_perp[0]
+    # Convert 2D vectors to 3D by adding z=0 component
+    GA_vector_3d = np.array([GA_vector[0], GA_vector[1], 0])
+    AK_perp_3d = np.array([AK_perp[0], AK_perp[1], 0])
+    cross_product_GA_AKperp_3d = np.cross(GA_vector_3d, AK_perp_3d)
+    cross_product_GA_AKperp = cross_product_GA_AKperp_3d[2]  # Extract z-component (scalar result)
     print("cross_product_GA_AKperp: ", cross_product_GA_AKperp)
     # Store results in values dictionary for potential use elsewhere
     values["cross_product_spring_GD"] = cross_product_spring_GD
@@ -547,7 +723,7 @@ def force(DF):
     # Therefore: F_AK_perp = -cross_product_spring_GD / cross_product_GA_AKperp
     
     if abs(cross_product_GA_AKperp) > 1e-10:  # Avoid division by zero
-        F_AK_perp = -cross_product_spring_GD / cross_product_GA_AKperp
+        F_AK_perp = cross_product_spring_GD / cross_product_GA_AKperp
         values["F_AK_perp"] = F_AK_perp
         print(f"Force perpendicular to AK for zero torque at G: {F_AK_perp:.3f} N")
     else:
@@ -796,16 +972,201 @@ def plot_gif():
     print(f"Generated {len(os.listdir('gif'))} images in the 'gif' folder")
     print("You can use these images to create an animated GIF using external tools")
 
+def plot_gif_velocity():
+    # Save a list of all joint angles for each extension
+    all_joint_angles = []
+    all_joint_velocities = []
+    global values
+    # Create a directory for gif images if it doesn't exist
+    if not os.path.exists('gif'):
+        os.makedirs('gif')
+    
+    # Save a deep copy of the original values
+    original_values = copy.deepcopy(values)
+    
+    # Generate images for each extension
+    for extension in np.arange(0, 15, 0.1):
+        # Create a new figure for each position
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Completely reset values to their original state
+        values = copy.deepcopy(original_values)
+        
+        # Calculate position for this extension
+        success = position(extension)
+        success_dot = velocity(1.0)  # Spring extending at 1 mm/s
+        # Only plot if the position calculation was successful
+        if success:
+            # Save all joint angles for this extension
+            joint_angles = {
+                'extension': extension,
+                'AB': np.rad2deg(float(values[A["AB"]])),
+                'AK': np.rad2deg(float(values[A["AK"]])),
+                'GD': np.rad2deg(float(values[A["GD"]])),
+                'GE': np.rad2deg(float(values[A["GE"]])),
+                'CG': np.rad2deg(float(values[A["CG"]])),
+                'GH': np.rad2deg(float(values[A["GH"]])),
+                'IH': np.rad2deg(float(values[A["IH"]])),
+                'IB': np.rad2deg(float(values[A["IB"]])),
+                'IJ': np.rad2deg(float(values[A["IJ"]])),
+                'KJ': np.rad2deg(float(values[A["KJ"]]))
+            }
+            all_joint_angles.append(joint_angles)
+            # Plot the mechanism for this extension
+            fig, ax = plot_mechanism(values, fig, ax, show=False)
+
+            # Save all joint velocities for this extension
+            joint_velocities = {
+                'extension': extension,
+                'GD_dot': np.rad2deg(float(values[A_dot["GD"]])),
+                'GE_dot': np.rad2deg(float(values[A_dot["GE"]])),
+                'CG_dot': np.rad2deg(float(values[A_dot["CG"]])),
+                'GH_dot': np.rad2deg(float(values[A_dot["GH"]])),
+                'IH_dot': np.rad2deg(float(values[A_dot["IH"]])),
+                'IC_dot': np.rad2deg(float(values[A_dot["IC"]])),
+                'IB_dot': np.rad2deg(float(values[A_dot["IB"]])),
+                'IJ_dot': np.rad2deg(float(values[A_dot["IJ"]])),
+                'KJ_dot': np.rad2deg(float(values[A_dot["KJ"]])),
+                'KB_dot': np.rad2deg(float(values[A_dot["KB"]])),
+                'AK_dot': np.rad2deg(float(values[A_dot["AK"]])),
+                'AB_dot': np.rad2deg(float(values[A_dot["AB"]]))
+            }
+            all_joint_velocities.append(joint_velocities)
+            
+            # Set title and y limits
+            ax.set_title(f'Mechanism Position - Extension: {extension:.1f} mm')
+            ax.set_ylim(-80, 40)  # Set y limits as requested
+            
+            # Save the figure as an image
+            filename = f'gif/extension_{extension:.1f}.png'
+            plt.savefig(filename, dpi=100, bbox_inches='tight')
+            print(f"Saved {filename}")
+            
+            # Close the figure to free memory
+            plt.close(fig)
+        else:
+            print(f"Skipping position for extension {extension:.1f} due to invalid solution")
+    
+    # Reset values to original state after all iterations
+    values = copy.deepcopy(original_values)
+
+    # Create a comprehensive plot of all joint angles vs extension
+    if all_joint_angles:
+        plt.figure(figsize=(15, 10))
+        
+        # Extract data for plotting
+        extensions = [data['extension'] for data in all_joint_angles]
+        
+        # Plot each joint angle
+        plt.subplot(2, 2, 1)
+        plt.plot(extensions, [data['AB'] for data in all_joint_angles], 'b-', linewidth=2, label='AB')
+        plt.plot(extensions, [data['AK'] for data in all_joint_angles], 'r-', linewidth=2, label='AK')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Triangle AKB Joint Angles')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 2)
+        plt.plot(extensions, [data['GD'] for data in all_joint_angles], 'g-', linewidth=2, label='GD')
+        plt.plot(extensions, [data['GE'] for data in all_joint_angles], 'orange', linewidth=2, label='GE')
+        plt.plot(extensions, [data['CG'] for data in all_joint_angles], 'purple', linewidth=2, label='CG')
+        plt.plot(extensions, [data['GH'] for data in all_joint_angles], 'm-', linewidth=2, label='GH')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Point G Connected Angles')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 3)
+        plt.plot(extensions, [data['IH'] for data in all_joint_angles], 'y-', linewidth=2, label='IH')
+        plt.plot(extensions, [data['IB'] for data in all_joint_angles], 'k-', linewidth=2, label='IB')
+        plt.plot(extensions, [data['IJ'] for data in all_joint_angles], 'c-', linewidth=2, label='IJ')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Point I Connected Angles')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 4)
+        plt.plot(extensions, [data['KJ'] for data in all_joint_angles], 'darkblue', linewidth=2, label='KJ')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Joint KJ Angle')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig('joint_angles_vs_extension.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        print("Saved comprehensive joint angles plot as 'joint_angles_vs_extension.png'")
+    
+    if all_joint_velocities:
+        plt.figure(figsize=(15, 10))
+        
+        # Extract data for plotting
+        extensions = [data['extension'] for data in all_joint_velocities]
+
+        plt.subplot(2, 2, 1)
+        plt.plot(extensions, [data['GD_dot'] for data in all_joint_velocities], 'r-', linewidth=2, label='GD')
+        plt.plot(extensions, [data['GE_dot'] for data in all_joint_velocities], 'orange', linewidth=2, label='GE')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angular Velocity (rad/s)')
+        plt.title('DEFG Loop Angular Velocities')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 2)
+        plt.plot(extensions, [data['CG_dot'] for data in all_joint_velocities], 'purple', linewidth=2, label='CG')
+        plt.plot(extensions, [data['IC_dot'] for data in all_joint_velocities], 'c-', linewidth=2, label='IC')
+        plt.plot(extensions, [data['IH_dot'] for data in all_joint_velocities], 'y-', linewidth=2, label='IH')
+        plt.plot(extensions, [data['GH_dot'] for data in all_joint_velocities], 'm-', linewidth=2, label='GH')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angular Velocity (rad/s)')
+        plt.title('CIHG Loop Angular Velocities')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 3)
+        plt.plot(extensions, [data['IB_dot'] for data in all_joint_velocities], 'k-', linewidth=2, label='IB')
+        plt.plot(extensions, [data['IJ_dot'] for data in all_joint_velocities], 'b-', linewidth=2, label='IJ')
+        plt.plot(extensions, [data['KJ_dot'] for data in all_joint_velocities], 'g-', linewidth=2, label='KJ')
+        plt.plot(extensions, [data['KB_dot'] for data in all_joint_velocities], 'darkgreen', linewidth=2, label='KB')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angular Velocity (rad/s)')
+        plt.title('BJIK Loop Angular Velocities')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 4)
+        plt.plot(extensions, [data['AB_dot'] for data in all_joint_velocities], 'darkblue', linewidth=2, label='AB')
+        plt.plot(extensions, [data['AK_dot'] for data in all_joint_velocities], 'darkred', linewidth=2, label='AK')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angular Velocity (rad/s)')
+        plt.title('ABK Triangle Angular Velocities')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig('joint_velocities_vs_extension.png', dpi=300, bbox_inches='tight')
+        plt.show()
+        print("Saved comprehensive joint velocities plot as 'joint_velocities_vs_extension.png'")
+    print(f"Generated {len(os.listdir('gif'))} images in the 'gif' folder")
+    print("You can use these images to create an animated GIF using external tools")
+
 def plot_angles_vs_extension():
     global values
     # Save original values
     original_values = copy.deepcopy(values)
     
     # Define extension range
-    extensions = np.arange(0, 20, 0.1)  # Same range as plot_gif for consistency
+    extensions = np.arange(0, 16, 0.1)  # Same range as plot_gif for consistency
     ab_angles = []
     bc_angles = []
     cd_angles = []
+    encoder1_angles = []
+    encoder2_angles = []
+    encoder3_angles = []
     valid_extensions = []
     
     # Calculate angles for each extension
@@ -824,7 +1185,29 @@ def plot_angles_vs_extension():
             ab_angle = np.rad2deg(float(values[A["AB"]]))
             bc_angle = np.rad2deg(float(values["A_BC"]))
             cd_angle = np.rad2deg(float(values["A_CD"]))
-            
+
+            # Calculate encoder1 angle (angle of vector DC relative to x-axis)
+            D = points['D']
+            C = points['C']
+            DC_vector = C - D
+            encoder1_angle = np.rad2deg(np.arctan2(DC_vector[1], DC_vector[0]))
+            # Convert from -180 to 180 range to 0 to 360 range
+            if encoder1_angle < 0:
+                encoder1_angle += 360
+            print("extension: ", extension, "encoder1_angle: ", encoder1_angle)
+
+            # print("values[A['CG']]: ", float(values[A["CG"]]))
+            # print("values[A['GD']]: ", float(values[A["GD"]]))
+            # print("values[L['CG']]: ", float(values[L["CG"]]))
+            # print("values[L['CD']]: ", float(values["L_CD"]))
+            # print("values[A['CG']] - values[A['GD']]: ", float(values[A["CG"]]) - float(values[A["GD"]]))
+
+            # print(float(values[A["CG"]]) - float(values[A["GD"]]))
+
+            # encoder1_angle = np.rad2deg(np.arcsin(np.sin(float(values[A["CG"]]) - float(values[A["GD"]])) * float(values[L["CG"]]) / float(values["L_CD"])))
+            # print("extension: ", extension, "encoder1_angle: ", encoder1_angle)
+
+            encoder1_angles.append(encoder1_angle)
             # Store the results
             valid_extensions.append(extension)
             ab_angles.append(ab_angle)
@@ -839,9 +1222,10 @@ def plot_angles_vs_extension():
     # Create the plot
     plt.figure(figsize=(12, 8))
     
-    plt.plot(valid_extensions, ab_angles, 'b-', linewidth=2, label='AB angle')
-    plt.plot(valid_extensions, bc_angles, 'r-', linewidth=2, label='BC angle')
-    plt.plot(valid_extensions, cd_angles, 'g-', linewidth=2, label='CD angle')
+    # plt.plot(valid_extensions, ab_angles, 'b-', linewidth=2, label='AB angle')
+    # plt.plot(valid_extensions, bc_angles, 'r-', linewidth=2, label='BC angle')
+    # plt.plot(valid_extensions, cd_angles, 'g-', linewidth=2, label='CD angle')
+    plt.plot(valid_extensions, encoder1_angles, 'y-', linewidth=2, label='Encoder 1 angle')
     
     plt.xlabel('Extension (mm)')
     plt.ylabel('Angle (degrees)')
@@ -890,6 +1274,45 @@ def plot_force_vs_extension():
     plt.tight_layout()
     plt.show()
 
+def plot_velocity_vs_extension():
+    global values
+    # Save original values
+    original_values = copy.deepcopy(values)
+    
+    # Define extension range
+    extensions = np.arange(0, 16, 0.1)  # Same range as plot_gif for consistency
+    velocities = []
+    
+    # Calculate angles for each extension
+    for extension in extensions:
+        # Reset values to original state
+        values = copy.deepcopy(original_values)
+        
+        # Calculate position for the given extension
+        success = position(extension)
+        
+        if success:
+            success_dot = velocity(extension)
+
+        else:
+            print(f"No valid solution found for {extension:.1f}mm extension")
+    
+    # Reset values to original state
+    values = copy.deepcopy(original_values)
+    
+    # Create the plot
+    plt.figure(figsize=(12, 8))
+    
+    plt.plot(extensions, forces, 'b-', linewidth=2, label='Force')
+    
+    plt.xlabel('Extension (mm)')
+    plt.ylabel('Force (N)')
+    plt.title('Force Tip vs Spring Extension')
+    plt.grid(True, alpha=0.3)
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
     # Plot angles as a function of extension
     # plot_angles_vs_extension()
@@ -902,4 +1325,5 @@ if __name__ == "__main__":
     # plot_gif()
     # position(0.0)
     # velocity(0.1)
-    plot_force_vs_extension()
+    # plot_force_vs_extension()
+    plot_gif_velocity()
