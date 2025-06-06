@@ -573,7 +573,7 @@ def velocity(DF_dot):
     values[A_dot["GE"]] = solution1[A_dot["GE"]]
 
     values[A_dot["GH"]] = values[A_dot["GE"]]
-    values[A_dot["CG"]] = values[A_dot["GD"]]
+    values[A_dot["CG"]] = -values[A_dot["GD"]]
     
     # Horizontal components (cosine equation)
     eq1 = L["IC"] * A_dot["IC"] * sp.cos(A["IC"]) - L["IH"] * A_dot["IH"] * sp.cos(A["IH"]) + L["GH"] * A_dot["GH"] * sp.cos(A["GH"]) - L["CG"] * A_dot["CG"] * sp.cos(A["CG"])
@@ -701,7 +701,6 @@ def force(DF):
     print("AK_unit: ", AK_unit)
     
     # Calculate perpendicular unit vector to AK (rotate 90 degrees)
-    # Calculate perpendicular unit vector to AK (rotate 90 degrees counterclockwise)
     # The direction matters for the cross product calculation - this gives a consistent perpendicular direction
     AK_perp = np.array([-AK_unit[1], AK_unit[0]])
     print("AK_perp: ", AK_perp)
@@ -985,7 +984,7 @@ def plot_gif_velocity():
     original_values = copy.deepcopy(values)
     
     # Generate images for each extension
-    for extension in np.arange(0, 15, 0.1):
+    for extension in np.arange(0, 15, 0.2):
         # Create a new figure for each position
         fig, ax = plt.subplots(figsize=(10, 8))
         
@@ -1041,6 +1040,8 @@ def plot_gif_velocity():
             filename = f'gif/extension_{extension:.1f}.png'
             plt.savefig(filename, dpi=100, bbox_inches='tight')
             print(f"Saved {filename}")
+
+            print("Extension: ", extension)
             
             # Close the figure to free memory
             plt.close(fig)
@@ -1111,7 +1112,7 @@ def plot_gif_velocity():
         plt.plot(extensions, [data['GD_dot'] for data in all_joint_velocities], 'r-', linewidth=2, label='GD')
         plt.plot(extensions, [data['GE_dot'] for data in all_joint_velocities], 'orange', linewidth=2, label='GE')
         plt.xlabel('Extension (mm)')
-        plt.ylabel('Angular Velocity (rad/s)')
+        plt.ylabel('Angular Velocity (deg/s)')
         plt.title('DEFG Loop Angular Velocities')
         plt.legend()
         plt.grid(True, alpha=0.3)
@@ -1122,7 +1123,7 @@ def plot_gif_velocity():
         plt.plot(extensions, [data['IH_dot'] for data in all_joint_velocities], 'y-', linewidth=2, label='IH')
         plt.plot(extensions, [data['GH_dot'] for data in all_joint_velocities], 'm-', linewidth=2, label='GH')
         plt.xlabel('Extension (mm)')
-        plt.ylabel('Angular Velocity (rad/s)')
+        plt.ylabel('Angular Velocity (deg/s)')
         plt.title('CIHG Loop Angular Velocities')
         plt.legend()
         plt.grid(True, alpha=0.3)
@@ -1133,7 +1134,7 @@ def plot_gif_velocity():
         plt.plot(extensions, [data['KJ_dot'] for data in all_joint_velocities], 'g-', linewidth=2, label='KJ')
         plt.plot(extensions, [data['KB_dot'] for data in all_joint_velocities], 'darkgreen', linewidth=2, label='KB')
         plt.xlabel('Extension (mm)')
-        plt.ylabel('Angular Velocity (rad/s)')
+        plt.ylabel('Angular Velocity (deg/s)')
         plt.title('BJIK Loop Angular Velocities')
         plt.legend()
         plt.grid(True, alpha=0.3)
@@ -1142,7 +1143,7 @@ def plot_gif_velocity():
         plt.plot(extensions, [data['AB_dot'] for data in all_joint_velocities], 'darkblue', linewidth=2, label='AB')
         plt.plot(extensions, [data['AK_dot'] for data in all_joint_velocities], 'darkred', linewidth=2, label='AK')
         plt.xlabel('Extension (mm)')
-        plt.ylabel('Angular Velocity (rad/s)')
+        plt.ylabel('Angular Velocity (deg/s)')
         plt.title('ABK Triangle Angular Velocities')
         plt.legend()
         plt.grid(True, alpha=0.3)
@@ -1151,6 +1152,7 @@ def plot_gif_velocity():
         plt.savefig('joint_velocities_vs_extension.png', dpi=300, bbox_inches='tight')
         plt.show()
         print("Saved comprehensive joint velocities plot as 'joint_velocities_vs_extension.png'")
+
     print(f"Generated {len(os.listdir('gif'))} images in the 'gif' folder")
     print("You can use these images to create an animated GIF using external tools")
 
@@ -1234,6 +1236,20 @@ def plot_angles_vs_extension():
     plt.legend()
     plt.tight_layout()
     plt.show()
+
+    # Save data to CSV file
+    import csv
+    
+    # Create CSV file with extension and encoder1 angle data
+    with open('encoder1_angles_vs_extension.csv', 'w', newline='') as csvfile:
+        writer = csv.writer(csvfile)
+        # Write header
+        writer.writerow(['Extension (mm)', 'Encoder1 Angle (degrees)'])
+        # Write data rows
+        for ext, angle in zip(valid_extensions, encoder1_angles):
+            writer.writerow([ext, angle])
+    
+    print(f"Saved {len(valid_extensions)} data points to 'encoder1_angles_vs_extension.csv'")
 
 def plot_force_vs_extension():
     global values
