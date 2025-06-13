@@ -11,6 +11,8 @@ spring_rate_N_per_mm = 1.79
 spring_free_length = 76.2
 spring_fully_compressed_length = 28.48
 
+save_all_A = []
+
 
 F_spring = spring_rate_N_per_mm * (spring_free_length - spring_fully_compressed_length)
 
@@ -171,6 +173,19 @@ def plot_mechanism(values, fig=None, ax=None, show=True, color=None):
     # # Add links to point A
     ax.plot([B[0], A[0]], [B[1], A[1]], 'darkgreen', linewidth=3)  # Link AB
     ax.plot([K[0], A[0]], [K[1], A[1]], 'darkgreen', linewidth=3)  # Link AK
+
+    # Plot point A
+
+    ax.plot(A[0], A[1], 'ro', markersize=10)  # Plot point A
+    
+    # Save point A to save_all_A
+    save_all_A.append(A)
+
+    # Plot all saved A points
+    if save_all_A:
+        for i, A_saved in enumerate(save_all_A):
+            ax.plot(A_saved[0], A_saved[1], 'go', markersize=6, alpha=1.0)
+
     
     # Plot the points if no color is specified (to avoid cluttering with multiple positions)
     if color is None:
@@ -190,7 +205,7 @@ def plot_mechanism(values, fig=None, ax=None, show=True, color=None):
     
     # Calculate reasonable y-axis limits based on points
     max_y_dim = max([np.max(np.abs(point[1])) for point in points.values()]) * 1.2
-    ax.set_ylim(-max_y_dim, max_y_dim)
+    ax.set_ylim(-100, 25)
     
     # Only show if explicitly requested
     if show:
@@ -283,7 +298,6 @@ def plot_mechanism_velocity(values, fig=None, ax=None, show=True, color=None):
     # print(f"Expected AK distance: {values[L['AK']]}, Actual distance: {ak_check}")
     
     return fig, ax
-
 
 def position(DF):
     values[L["DF"]] += DF
@@ -498,32 +512,83 @@ def position(DF):
     # print("Stored solutions: ", stored_solutions)
     # print("Solution 1: ", solution1)
 
-    if not stored_solutions:
+    F = np.array([0, 0])
+    
+    # Calculate positions of all points based on angles and lengths from the horizontal
+    E = F + np.array([values[L["FE"]] * np.cos(values[A["FE"]]), 
+                      values[L["FE"]] * np.sin(values[A["FE"]])])
+    
+    D = F + np.array([values[L["DF"]] * np.cos(values[A["DF"]] + np.pi), 
+                      values[L["DF"]] * np.sin(values[A["DF"]] + np.pi)])
+    
+    G = D + np.array([values[L["GD"]] * np.cos(float(values[A["GD"]]) + np.pi), 
+                      values[L["GD"]] * np.sin(float(values[A["GD"]]) + np.pi)])
+    
+    C = G + np.array([values[L["CG"]] * np.cos(float(values[A["CG"]])), 
+                      values[L["CG"]] * np.sin(float(values[A["CG"]]))])
+    
+    H = G + np.array([values[L["GH"]] * np.cos(float(values[A["GH"]])), 
+                      values[L["GH"]] * np.sin(float(values[A["GH"]]))])
+    
+    I = H + np.array([values[L["IH"]] * np.cos(float(values[A["IH"]]) + np.pi), 
+                      values[L["IH"]] * np.sin(float(values[A["IH"]]) + np.pi)])
+    
+    B = I + np.array([values[L["IB"]] * np.cos(float(values[A["IB"]])), 
+                      values[L["IB"]] * np.sin(float(values[A["IB"]]))])
+    
+    J = I + np.array([values[L["IJ"]] * np.cos(float(values[A["IJ"]])), 
+                      values[L["IJ"]] * np.sin(float(values[A["IJ"]]))])
+    
+    K = J + np.array([values[L["KJ"]] * np.cos(float(values[A["KJ"]]) + np.pi), 
+                      values[L["KJ"]] * np.sin(float(values[A["KJ"]]) + np.pi)])
+
+    if len(stored_solutions) == 1:
         for sol in solution1:
             if sol[1] > 0:  # Check if AK angle is positive
                 solution = sol
-                stored_solutions.append([solution])
+                # Calculate point A for this solution to store
+                temp_values = values.copy()
+                temp_values[A["AB"]] = sol[0]
+                temp_values[A["AK"]] = sol[1]
+                
+                temp_K = J + np.array([temp_values[L["KJ"]] * np.cos(float(temp_values[A["KJ"]]) + np.pi), 
+                                       temp_values[L["KJ"]] * np.sin(float(temp_values[A["KJ"]]) + np.pi)])
+                
+                temp_A = temp_K + np.array([temp_values[L["AK"]] * np.cos(float(sol[1]) + np.pi), 
+                                            temp_values[L["AK"]] * np.sin(float(sol[1]) + np.pi)])
+                
+                stored_solutions[-1].append(temp_A)
                 break
     else:
-        # Find the solution closest to the previous solution
-        last_solution = stored_solutions[-1][0]  # Get the most recent solution
+        # print("Stored solutions: ", stored_solutions)
+        # Find the solution that results in point A closest to the previous point A
+        last_A = stored_solutions[-2][3]  # Get the most recent point A
         closest_solution = None
+        closest_A = None
         min_distance = float('inf')
         
         for sol in solution1:
-            # Calculate Euclidean distance between current solution and last solution
-            # Normalize angles to 0-360 degrees
-            sol_0_norm = sol[0] % (2 * np.pi)
-            sol_1_norm = sol[1] % (2 * np.pi)
-            last_0_norm = last_solution[0] % (2 * np.pi)
-            last_1_norm = last_solution[1] % (2 * np.pi)
-            distance = np.sqrt(float((sol_0_norm - last_0_norm) ** 2) + float((sol_1_norm - last_1_norm) ** 2))
+            # Calculate point A for this solution
+            temp_values = values.copy()
+            temp_values[A["AB"]] = sol[0]
+            temp_values[A["AK"]] = sol[1]
+            
+            temp_K = J + np.array([temp_values[L["KJ"]] * np.cos(float(temp_values[A["KJ"]]) + np.pi), 
+                                   temp_values[L["KJ"]] * np.sin(float(temp_values[A["KJ"]]) + np.pi)])
+            
+            temp_A = temp_K + np.array([temp_values[L["AK"]] * np.cos(float(sol[1]) + np.pi), 
+                                        temp_values[L["AK"]] * np.sin(float(sol[1]) + np.pi)])
+            
+            # Calculate distance between current A and previous A
+            distance = np.sqrt((temp_A[0] - last_A[0])**2 + (temp_A[1] - last_A[1])**2)
             
             if distance < min_distance:
                 min_distance = distance
                 closest_solution = sol
+                closest_A = temp_A
         
         solution = closest_solution
+        stored_solutions[-1].append(closest_A)
     
     # If no solution was found, return False to indicate failure
     if solution is None:
@@ -532,10 +597,6 @@ def position(DF):
 
     values[A["AB"]] = solution[0]
     values[A["AK"]] = solution[1]
-
-    # Store the solution for the next iteration
-    if stored_solutions:
-        stored_solutions[-1].append(solution)
 
     return True
 
@@ -658,7 +719,6 @@ def velocity(DF_dot):
 
     values[A_dot["AK"]] = solution4[A_dot["AK"]]
     values[A_dot["AB"]] = solution4[A_dot["AB"]]
-
 
 def force(DF):
     global values
@@ -830,7 +890,9 @@ def plot_all_positions():
     original_values = copy.deepcopy(values)
     
     # Plot all positions in a single figure
-    for i, extension in enumerate(np.arange(0, 20, 0.1)):
+    for i, extension in enumerate(np.arange(0, 16, 0.1)):
+
+        print("Extension: ", extension)
         # try:
         # Completely reset values to their original state
         values = copy.deepcopy(original_values)
@@ -853,10 +915,15 @@ def plot_all_positions():
     values = copy.deepcopy(original_values)
     
     # Add a title for the combined plot
-    ax.set_title('Mechanism Positions for Valid Extensions 0-19')
+    ax.set_title('Mechanism Workspace')
     
     # Now show the complete figure with all positions
     plt.show()
+
+    # Save the plot to file
+    plt.savefig('all_positions.png', dpi=300, bbox_inches='tight')
+    print("Plot saved as 'all_positions.png'")
+
 
 def plot_gif():
     # Save a list of all joint angles for each extension
@@ -870,7 +937,7 @@ def plot_gif():
     original_values = copy.deepcopy(values)
     
     # Generate images for each extension
-    for extension in np.arange(0, 15, 0.1):
+    for extension in np.arange(0, 15, 0.05):
         # Create a new figure for each position
         fig, ax = plt.subplots(figsize=(10, 8))
         
@@ -902,7 +969,7 @@ def plot_gif():
             
             # Set title and y limits
             ax.set_title(f'Mechanism Position - Extension: {extension:.1f} mm')
-            ax.set_ylim(-80, 40)  # Set y limits as requested
+            ax.set_ylim(-100, 25)  # Set y limits as requested
             
             # Save the figure as an image
             filename = f'gif/extension_{extension:.1f}.png'
@@ -971,6 +1038,200 @@ def plot_gif():
     print(f"Generated {len(os.listdir('gif'))} images in the 'gif' folder")
     print("You can use these images to create an animated GIF using external tools")
 
+def plot_gif_velocity_new():
+    # Save a list of all joint angles for each extension
+    all_joint_angles = []
+    global values
+    # Create a directory for gif images if it doesn't exist
+    if not os.path.exists('gif'):
+        os.makedirs('gif')
+    
+    # Save a deep copy of the original values
+    original_values = copy.deepcopy(values)
+    
+    # Generate images for each extension
+    for extension in np.arange(0, 16.4, 0.1):
+        # Create a new figure for each position
+        fig, ax = plt.subplots(figsize=(10, 8))
+        
+        # Completely reset values to their original state
+        values = copy.deepcopy(original_values)
+        
+        # Calculate position for this extension
+        success = position(extension)
+        
+        # Only plot if the position calculation was successful
+        if success:
+
+            points = calculate_points(values)
+
+            # Calculate angle of GF with respect to horizontal
+            G = points['G']
+            F = points['F']
+            
+            # Calculate the vector from F to G
+            GF_vector = G - F
+            
+            # Calculate angle with horizontal (positive x-axis)
+            angle_GF_horizontal = np.arctan2(GF_vector[1], GF_vector[0])
+            
+            # Store the angle in values for potential use
+            values["A_GF"] = angle_GF_horizontal
+
+            # Calculate angle of IF with respect to horizontal
+            I = points['I']
+            
+            # Calculate the vector from F to I
+            IF_vector = I - F
+            
+            # Calculate angle with horizontal (positive x-axis)
+            angle_IF_horizontal = np.arctan2(IF_vector[1], IF_vector[0])
+            
+            # Store the angle in values for potential use
+            values["A_IF"] = angle_IF_horizontal
+
+            # Calculate angle of AF with respect to horizontal
+            A_point = points['A']
+            
+            # Calculate the vector from F to A
+            AF_vector = A_point - F
+            
+            # Calculate angle with horizontal (positive x-axis)
+            angle_AF_horizontal = np.arctan2(AF_vector[1], AF_vector[0])
+            
+            # Store the angle in values for potential use
+            values["A_AF"] = angle_AF_horizontal
+            
+            # Calculate velocities by dividing by time step (0.1 extension units)
+            dt = 0.1  # Time step based on extension increment
+            
+            # Initialize velocity lists if this is the first iteration
+            if extension == 0:
+                velocity_GF = []
+                velocity_IF = []
+                velocity_AF = []
+                prev_angle_GF = angle_GF_horizontal
+                prev_angle_IF = angle_IF_horizontal
+                prev_angle_AF = angle_AF_horizontal
+            else:
+                # Calculate angular velocities
+                velocity_GF.append((angle_GF_horizontal - prev_angle_GF) / dt)
+                velocity_IF.append((angle_IF_horizontal - prev_angle_IF) / dt)
+                velocity_AF.append((angle_AF_horizontal - prev_angle_AF) / dt)
+                
+                # Update previous angles for next iteration
+                prev_angle_GF = angle_GF_horizontal
+                prev_angle_IF = angle_IF_horizontal
+                prev_angle_AF = angle_AF_horizontal
+
+            # Save all joint angles for this extension
+            joint_angles = {
+                'extension': extension,
+                'AB': np.rad2deg(float(values[A["AB"]])),
+                'AK': np.rad2deg(float(values[A["AK"]])),
+                'GD': np.rad2deg(float(values[A["GD"]])),
+                'GE': np.rad2deg(float(values[A["GE"]])),
+                'CG': np.rad2deg(float(values[A["CG"]])),
+                'GH': np.rad2deg(float(values[A["GH"]])),
+                'IH': np.rad2deg(float(values[A["IH"]])),
+                'IB': np.rad2deg(float(values[A["IB"]])),
+                'IJ': np.rad2deg(float(values[A["IJ"]])),
+                'KJ': np.rad2deg(float(values[A["KJ"]]))
+            }
+            all_joint_angles.append(joint_angles)
+            # Plot the mechanism for this extension
+            fig, ax = plot_mechanism(values, fig, ax, show=False)
+            
+            # Set title and y limits
+            ax.set_title(f'Mechanism Position - Extension: {extension:.1f} mm')
+            ax.set_ylim(-100, 25)  # Set y limits as requested
+            
+            # Save the figure as an image
+            filename = f'gif/extension_{extension:.1f}.png'
+            plt.savefig(filename, dpi=100, bbox_inches='tight')
+            print(f"Saved {filename}")
+            
+            # Close the figure to free memory
+            plt.close(fig)
+        else:
+            print(f"Skipping position for extension {extension:.1f} due to invalid solution")
+    
+    # Reset values to original state after all iterations
+    values = copy.deepcopy(original_values)
+
+    # Create a comprehensive plot of all joint angles vs extension
+    if all_joint_angles:
+        plt.figure(figsize=(15, 10))
+        
+        # Extract data for plotting
+        extensions = [data['extension'] for data in all_joint_angles]
+        
+        # Plot each joint angle
+        plt.subplot(2, 2, 1)
+        plt.plot(extensions, [data['AB'] for data in all_joint_angles], 'b-', linewidth=2, label='AB')
+        plt.plot(extensions, [data['AK'] for data in all_joint_angles], 'r-', linewidth=2, label='AK')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Triangle AKB Joint Angles')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 2)
+        plt.plot(extensions, [data['GD'] for data in all_joint_angles], 'g-', linewidth=2, label='GD')
+        plt.plot(extensions, [data['GE'] for data in all_joint_angles], 'orange', linewidth=2, label='GE')
+        plt.plot(extensions, [data['CG'] for data in all_joint_angles], 'purple', linewidth=2, label='CG')
+        plt.plot(extensions, [data['GH'] for data in all_joint_angles], 'm-', linewidth=2, label='GH')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Point G Connected Angles')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 3)
+        plt.plot(extensions, [data['IH'] for data in all_joint_angles], 'y-', linewidth=2, label='IH')
+        plt.plot(extensions, [data['IB'] for data in all_joint_angles], 'k-', linewidth=2, label='IB')
+        plt.plot(extensions, [data['IJ'] for data in all_joint_angles], 'c-', linewidth=2, label='IJ')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Point I Connected Angles')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.subplot(2, 2, 4)
+        plt.plot(extensions, [data['KJ'] for data in all_joint_angles], 'darkblue', linewidth=2, label='KJ')
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Angle (degrees)')
+        plt.title('Joint KJ Angle')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        
+        plt.tight_layout()
+        plt.savefig('joint_angles_vs_extension.png', dpi=300, bbox_inches='tight')
+        # plt.show()
+        # print("Saved comprehensive joint angles plot as 'joint_angles_vs_extension.png'")
+    
+    if velocity_GF or velocity_IF or velocity_AF:
+        plt.figure(figsize=(15, 10))
+        
+        if velocity_GF:
+            plt.plot(extensions[1:], velocity_GF, 'b-', linewidth=2, label='MCP Velocity (deg/s)')
+        if velocity_IF:
+            plt.plot(extensions[1:], velocity_IF, 'r-', linewidth=2, label='PIP Velocity (deg/s)')
+        if velocity_AF:
+            plt.plot(extensions[1:], velocity_AF, 'g-', linewidth=2, label='DIP Velocity (deg/s)')
+            
+        plt.xlabel('Extension (mm)')
+        plt.ylabel('Velocity (deg/s)')
+        plt.title('Joint Velocities vs Extension at 1mm/s')
+        plt.legend()
+        plt.grid(True, alpha=0.3)
+        plt.savefig('joint_velocities_vs_extension.png', dpi=300, bbox_inches='tight')
+        print("Saved combined velocity plot as 'joint_velocities_vs_extension.png'")
+
+    
+    print(f"Generated {len(os.listdir('gif'))} images in the 'gif' folder")
+    print("You can use these images to create an animated GIF using external tools")
+
 def plot_gif_velocity():
     # Save a list of all joint angles for each extension
     all_joint_angles = []
@@ -984,7 +1245,7 @@ def plot_gif_velocity():
     original_values = copy.deepcopy(values)
     
     # Generate images for each extension
-    for extension in np.arange(0, 15, 0.2):
+    for extension in np.arange(0, 3.5, 0.05):
         # Create a new figure for each position
         fig, ax = plt.subplots(figsize=(10, 8))
         
@@ -993,7 +1254,7 @@ def plot_gif_velocity():
         
         # Calculate position for this extension
         success = position(extension)
-        success_dot = velocity(1.0)  # Spring extending at 1 mm/s
+        success_dot = velocity(0.1)  # Spring extending at 1 mm/s
         # Only plot if the position calculation was successful
         if success:
             # Save all joint angles for this extension
@@ -1342,4 +1603,5 @@ if __name__ == "__main__":
     # position(0.0)
     # velocity(0.1)
     # plot_force_vs_extension()
-    plot_gif_velocity()
+    # plot_gif_velocity()
+    plot_gif_velocity_new()
